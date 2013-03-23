@@ -240,6 +240,7 @@ AC_ARG_WITH([zlib],
 if test "x$with_zlib" != "xno"; then
   AC_CHECK_HEADERS([zlib.h])
   AC_CHECK_LIB(z,inflate)
+  AC_CHECK_FUNCS([deflateSetStrRsync])
 fi
 
 AC_ARG_WITH([bz2lib],

@@ -60,6 +60,7 @@ archive_write_set_compression_gzip(struct archive *a)
 struct private_data {
 	int		 compression_level;
 	int		 timestamp;
+	int		 rsyncable;
 #ifdef HAVE_ZLIB_H
 	z_stream	 stream;
 	int64_t		 total_in;
@@ -167,6 +168,10 @@ archive_compressor_gzip_options(struct archive_write_filter *f, const char *key,
 		data->timestamp = (value == NULL)?-1:1;
 		return (ARCHIVE_OK);
 	}
+	if (strcmp(key, "rsyncable") == 0) {
+		data->rsyncable = (value == NULL)?0:1;
+		return (ARCHIVE_OK);
+	}
 
 	/* Note: The "warn" return is just to inform the options
 	 * supervisor that we didn't handle it.  It will generate
@@ -240,6 +245,19 @@ archive_compressor_gzip_open(struct archive_write_filter *f)
 	    -15 /* < 0 to suppress zlib header */,
 	    8,
 	    Z_DEFAULT_STRATEGY);
+
+#ifdef HAVE_DEFLATESETSTRRSYNC
+	if (ret == Z_OK) {
+		deflateSetStrRsync(&(data->stream), data->rsyncable);
+	}
+#else
+	if (data->rsyncable) {
+		archive_set_error(f->archive, ARCHIVE_ERRNO_MISC,
+		    "Internal error initializing "
+		    "compression library: no rsyncable support");
+		return (ARCHIVE_FATAL);
+	}
+#endif
 
 	if (ret == Z_OK) {
 		f->data = data;
@@ -415,6 +433,8 @@ archive_compressor_gzip_open(struct archive_write_filter *f)
 	else if (data->timestamp > 0)
 		/* Save timestamp. */
 		archive_strcat(&as, " -N");
+	if (data->rsyncable)
+		archive_strcat(&as, " --rsyncable");
 
 	f->write = archive_compressor_gzip_write;
 	r = __archive_write_program_open(f, data->pdata, as.s);
